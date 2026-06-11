@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulario Petición EPIs INGECA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react/": "https://esm.sh/react@18.2.0/",
+            "react-dom": "https://esm.sh/react-dom@18.2.0",
+            "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.292.0?external=react",
+            "docx": "https://esm.sh/docx@8.5.0"
+        }
+    }
+    </script>
+</head>
+<body class="bg-gray-50 p-4">
+    <div id="root"></div>
+    <script type="text/babel" data-type="module" data-presets="react">
+        import React, { useState } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { AlertTriangle, Download, CheckCircle } from 'lucide-react';
+        import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, WidthType, AlignmentType, VerticalAlign } from 'docx';
+
+        const PUESTOS = ["Ingeniería", "Administración", "RRHH", "AT", "Delineación", "Topografía", "Informática", "GIS-Delineación", "Ingeniería/AT", "Medio Ambiente", "Dirección", "Asistencia Oficinas"];
+
+        const EPIS_CATALOGO = [
+            { id: 1, nombre: "Casco de seguridad", talla: false },
+            { id: 2, nombre: "Guantes de protección mecánica (Nylon Bricofire)", talla: false },
+            { id: 3, nombre: "Gafas de protección anti polvo (Tector)", talla: false },
+            { id: 4, nombre: "Protectores auditivos (3M)", talla: false },
+            { id: 8, nombre: "Camiseta manga larga térmica (Wedze BL500)", talla: 'camiseta'},
+            { id: 9, nombre: "Camiseta protección solar larga", talla: 'camiseta' },
+            { id: 10, nombre: "Camiseta protección solar corta", talla: 'camiseta' },
+            { id: 11, nombre: "Camiseta manga corta algodón", talla: 'camiseta' },
+            { id: 6, nombre: "Chaquetón agua / alta visibilidad (Portwest S466)", talla: 'chaqueta'},
+            { id: 12, nombre: "Sudadera cálida", talla: 'chaqueta'},
+            { id: 7, nombre: "Pantalón de obra (Forclaz MT100)", talla: 'pantalon'},
+            { id: 5, nombre: "Botas de agua (Paredes SP5035 H2O)", talla: 'zapato'},
+            { id: 13, nombre: "Botas de seguridad (Robusta Dascilus S3)", talla: 'zapato'},
+            { id: 14, nombre: "Playeros de seguridad (Goodyear multicolor)", talla: 'zapato'}
+        ];
+
+        // Fetch protegido localmente
+        const loadLocalImage = async (filename) => {
+            try {
+                const response = await window.fetch('./' + filename, { cache: "no-store" });
+                if (!response.ok) return null;
+                const blob = await response.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsArrayBuffer(blob);
+                });
+            } catch(e) {
+                console.log("Aviso: " + filename + " no cargado.");
+                return null;
+            }
+        };
+
+        function App() {
+            const [nombre, setNombre] = useState('');
+            const [puesto, setPuesto] = useState(PUESTOS[0]);
+            const [recibido, setRecibido] = useState('Sí');
+            const [tallas, setTallas] = useState({ chaqueta: '', pantalon: '', camiseta: '', zapato: '' });
+            const [selectedEpis, setSelectedEpis] = useState([]);
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [status, setStatus] = useState('');
+
+            const handleToggleEpi = (id) => {
+                setSelectedEpis(prev => 
+                    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                );
+            };
+
+            const handleGenerate = async () => {
+                if (!nombre) return alert('Por favor introduzca el nombre del trabajador.');
+                setIsGenerating(true);
+                setStatus('Construyendo documento...');
+
+                try {
+                    const logoBuffer = await loadLocalImage("logo.png");
+                    const firmaBuffer = await loadLocalImage("firma.png");
+
+                    const dateObj = new Date();
+                    const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + " , " + dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                    const episTableRows = [
+                        new TableRow({
+                            children: [
+                                new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Descripción", bold: true, font: "Calibri", size: 22 })] })] }),
+                                new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Recibido/Confirmado *", bold: true, font: "Calibri", size: 22 })] })] }),
+                                new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Fecha de Entrega", bold: true, font: "Calibri", size: 22 })] })] })
+                            ]
+                        }),
+                        ...selectedEpis.map(epiId => {
+                            const epi = EPIS_CATALOGO.find(e => e.id === epiId);
+                            const assignedTalla = epi.talla ? (tallas[epi.talla] || "No indicada") : "N/A";
+                            return new TableRow({
+                                children: [
+                                    new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "- " + epi.nombre + " (Talla: " + assignedTalla + ")", bold: true, font: "Calibri", size: 22 })] })] }),
+                                    new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: recibido, bold: true, font: "Calibri", size: 22 })] })] }),
+                                    new TableCell({ margins: { top: 100, bottom: 100, left: 100, right: 100 }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: dateStr, bold: true, font: "Calibri", size: 22 })] })] })
+                                ]
+                            });
+                        })
+                    ];
+
+                    const builderElements = [];
+
+                    builderElements.push(
+                        new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: [
+                                new TableRow({
+                                    children: [
+                                        new TableCell({
+                                            width: { size: 30, type: WidthType.PERCENTAGE },
+                                            verticalAlign: VerticalAlign.CENTER,
+                                            margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                                            children: [
+                                                new Paragraph({
+                                                    alignment: AlignmentType.CENTER,
+                                                    children: logoBuffer ? [new ImageRun({ data: logoBuffer, transformation: { width: 140, height: 60 } })] : [new TextRun({text: "INGECA", bold: true, font: "Calibri"})]
+                                                })
+                                            ]
+                                        }),
+                                        new TableCell({
+                                            width: { size: 70, type: WidthType.PERCENTAGE },
+                                            verticalAlign: VerticalAlign.CENTER,
+                                            margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                                            children: [
+                                                new Paragraph({
+                                                    alignment: AlignmentType.CENTER,
+                                                    children: [new TextRun({ text: "CONTROL DE ENTREGA, USO Y MANTENIMIENTO DE LOS EPIS", bold: true, font: "Calibri", size: 30 })]
+                                                })
+                                            ]
+                                        })
+                                    ]
+                                })
+                            ]
+                        }) // end table
+                    );
+
+                    builderElements.push(
+                        new Paragraph({ text: "", spacing: { before: 200, after: 100 } }),
+                        new Paragraph({
+                            children: [new TextRun({ text: "Según lo establecido en el Art. 17 de la Ley de Prevención de Riesgos Laborales, la empresa entrega al trabajador abajo mencionado los siguientes equipos de protección para su uso personal en las actividades que desempeña en su puesto de trabajo.", font: "Calibri", size: 22 })],
+                            spacing: { after: 200 }
+                        }),
+                        new Paragraph({ children: [new TextRun({ text: "Nombre del trabajador: ", bold: true, font: "Calibri", size: 22 }), new TextRun({ text: nombre, font: "Calibri", size: 22 })] }),
+                        new Paragraph({ children: [new TextRun({ text: "Puesto de trabajo: ", bold: true, font: "Calibri", size: 22 }), new TextRun({ text: puesto, font: "Calibri", size: 22 })] }),
+                        new Paragraph({ text: "", spacing: { before: 200, after: 200 } }),
+                        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: episTableRows }),
+                        new Paragraph({ text: "", spacing: { before: 600, after: 200 } })
+                    );
+
+                    builderElements.push(
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            children: [new TextRun({ text: "Firma responsable:", bold: true, font: "Calibri", size: 22 })]
+                        })
+                    );
+
+                    if (firmaBuffer) {
+                        builderElements.push(
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [new ImageRun({ data: firmaBuffer, transformation: { width: 180, height: 90 } })]
+                            })
+                        );
+                    }
+
+                    const doc = new Document({
+                        sections: [{ properties: {}, children: builderElements }]
+                    });
+
+                    const blob = await Packer.toBlob(doc);
+                    const docUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = docUrl;
+                    link.download = "EstandarEPIs_" + nombre.replace(/ /g,"_") + ".docx";
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(docUrl);
+
+                    setStatus('¡Word Generado con éxito!');
+                } catch (error) {
+                    alert("Error generando Word: " + error.message);
+                } finally {
+                    setIsGenerating(false);
+                    setTimeout(() => setStatus(''), 4000);
+                }
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto font-sans bg-white shadow-lg border border-gray-200">
+                    <div className="bg-red-50 text-red-700 border-b border-red-200 p-6">
+                        <div className="flex items-start gap-4">
+                            <AlertTriangle className="w-8 h-8 flex-shrink-0 mt-1" />
+                            <div>
+                                <h1 className="text-xl font-bold uppercase mb-2">Aviso Importante</h1>
+                                <p className="text-red-900 font-semibold text-lg leading-relaxed">
+                                    Rellene este formulario y, una vez descargue su petición de EPIs (archivo Word), 
+                                    adjúntela y envíela a <a href="mailto:alejandra.gonzalez@ingeca.com?subject=Solicitud%20de%20EPIs" className="underline hover:text-red-950">alejandra.gonzalez@ingeca.com</a> por correo electrónico para proceder con su tramitación.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-10">
+                        <section>
+                            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">1. Datos Personales</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                                    <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Introduzca un nombre..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Puesto</label>
+                                    <select value={puesto} onChange={e => setPuesto(e.target.value)} className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                        {PUESTOS.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-1">¿Recibido/Confirmado?</label>
+                                    <select value={recibido} onChange={e => setRecibido(e.target.value)} className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <option value="Sí">Sí</option>
+                                        <option value="Aún no">Aún no</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">2. Tallas</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                                {['chaqueta', 'pantalon', 'camiseta', 'zapato'].map(p => (
+                                    <div key={p}>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1 capitalize">{p}</label>
+                                        <input type="text" value={tallas[p]} onChange={e => setTallas({...tallas, [p]: e.target.value})} className="w-full border border-gray-300 rounded p-2 text-center" placeholder={p === 'zapato' ? "Ej: 42" : "Ej: L"} />
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section>
+                            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">3. EPIs</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {EPIS_CATALOGO.map(epi => (
+                                    <label key={epi.id} className="flex items-start gap-3 p-4 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" checked={selectedEpis.includes(epi.id)} onChange={() => handleToggleEpi(epi.id)} className="w-5 h-5 mt-0.5 rounded text-blue-600" />
+                                        <div className="flex-1">
+                                            <span className="font-medium text-gray-800">{epi.nombre}</span>
+                                            {epi.talla && <div className="text-xs text-gray-500 mt-1">Requiere talla de: <span className="capitalize">{epi.talla}</span></div>}
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </section>
+
+                        <div className="pt-6 border-t flex items-center justify-between">
+                            <div className="text-sm text-gray-500 flex-1">
+                                {status && <span className="flex items-center gap-2 text-green-600 font-bold"><CheckCircle className="w-4 h-4"/> {status}</span>}
+                            </div>
+                            <button onClick={handleGenerate} disabled={isGenerating} className="flex items-center gap-2 px-8 py-3 rounded-lg text-white font-bold bg-gray-800 hover:bg-gray-900 transition-all">
+                                <Download className="w-5 h-5" /> {isGenerating ? 'Exportando Word...' : 'Generar Petición'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
